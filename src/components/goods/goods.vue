@@ -1,17 +1,17 @@
 <template>
     <div class="goods">
-        <div class="menu-wrapper">
+        <div class="menu-wrapper" ref="menuWrapper">
             <ul>
-                <li v-for="(item, index) in goods" :key="index" class="menu-item">
+                <li v-for="(item, index) in goods" :key="index" class="menu-item" :class="{'current': currentIndex===index}" @click="selectMenu(index, $event)">
                     <span class="text border-1px">
                         <span v-show="item.type>0" class="icon" :class="classMap[item.type]"></span>{{item.name}}
                     </span>
                 </li>
             </ul>
         </div>
-        <div class="foods-wrapper">
+        <div class="foods-wrapper" ref="foodsWrapper">
             <ul>
-                <li v-for="(item, index) in goods" :key="index" class="food-list">
+                <li v-for="(item, index) in goods" :key="index" class="food-list food-list-hook">
                     <h1 class="title">{{item.name}}</h1>
                     <ul>
                         <li v-for="(food, findex) in item.foods" :key="findex" class="food-item border-1px">
@@ -29,17 +29,25 @@
                                     <span class="now">￥{{food.price}}</span>
                                     <span class="old" v-show="food.oldPrice">￥{{food.oldPrice}}</span>
                                 </div>
+                                <!-- 添加/删除商品 -->
+                                <div class="cartcontrol-wrapper">
+                                    <cartcontrol  @add="addFood" :food="food"></cartcontrol>
+                                </div>
                             </div>
                         </li>
                     </ul>
                 </li>
             </ul>
         </div>
+        <!-- 购物车 -->
+        <shopcart ref="shopcart" :select-foods="selectFoods" :delivery-price="seller.deliveryPrice" :min-price="seller.minPrice"></shopcart>
     </div>
 </template>
 
 <script type='text/ecmascript-6'>
     import BScroll from 'better-scroll';
+    import shopcart from 'components/shopcart/shopcart';
+    import cartcontrol from 'components/cartcontrol/cartcontrol';
 
     const ERR_OK = 0;
 
@@ -51,8 +59,33 @@
         },
         data() {
             return {
-                goods: []
+                goods: [],
+                listHeight: [],
+                scrollY: 0
             };
+        },
+        computed: {
+            currentIndex () {
+                for (let i = 0; i < this.listHeight.length; i++) {
+                    let height1 = this.listHeight[i];
+                    let height2 = this.listHeight[i + 1];
+                    if (!height2 || (this.scrollY >= height1 && this.scrollY < height2)) {
+                        return i;
+                    }
+                }
+                return 0;
+            },
+            selectFoods () {
+                let foods = [];
+                this.goods.forEach((good) => {
+                    good.foods.forEach((food) => {
+                        if (food.count) {
+                            foods.push(food);
+                        }
+                    });
+                });
+                return foods;
+            }
         },
         created() {
             this.classMap = ['decrease', 'discount', 'special', 'invoice', 'guarantee'];
@@ -60,8 +93,59 @@
                 response = response.body;
                 if (response.errno === ERR_OK) {
                     this.goods = response.data;
+                    this.$nextTick(() => {
+                        this._initScroll();
+                        this._caculateHeight();
+                    });
                 }
             });
+        },
+        methods: {
+            selectMenu (index, event) {
+                // if (event._constructed) {
+                //     return; //经测试，浏览器和移动端都为true
+                // }
+                let foodList = this.$refs.foodsWrapper.getElementsByClassName('food-list-hook');
+                let el = foodList[index];
+                this.foodsScroll.scrollToElement(el, 300);
+            },
+            _initScroll () {
+                this.menuScroll = new BScroll(this.$refs.menuWrapper, {
+                    click: true
+                });
+                this.foodsScroll = new BScroll(this.$refs.foodsWrapper, {
+                    probeType: 3,
+                    click: true
+                });
+
+                this.foodsScroll.on('scroll', (pos) => {
+                    this.scrollY = Math.abs(Math.round(pos.y));
+                });
+            },
+            _caculateHeight () {
+                let foodList = this.$refs.foodsWrapper.getElementsByClassName('food-list-hook');
+                // console.log(foodList);
+                let height = 0;
+                this.listHeight.push(height);
+                for (let i = 0; i < foodList.length; i++) {
+                    let item = foodList[i];
+                    height += item.clientHeight;
+                    this.listHeight.push(height);
+                }
+            },
+            addFood(target) {
+                // this.$refs.shopcart.drop(target);
+                this._drop(target);
+            },
+            _drop(target) {
+                // this.$nextTick(() => {
+                // });
+                this.$refs.shopcart.drop(target);
+            }
+        },
+        components: {
+            shopcart,
+            cartcontrol
         }
     };
 </script>
@@ -86,6 +170,14 @@
                 height: 54px
                 line-height: 14px
                 margin: 0 auto
+                &.current
+                    position: relative
+                    z-index: 10
+                    margin-top: -1px
+                    background: #ffffff
+                    font-weight: 700
+                    .text
+                        border-none()
                 .icon
                     display inline-block
                     vertical-align: top
@@ -144,6 +236,7 @@
                         font-size: 10px
                         color: rgb(147, 153, 159)
                     .desc
+                        line-height 12px
                         margin-bottom: 8px
                     .extra
                         &.count
@@ -159,4 +252,8 @@
                             text-decoration: line-through
                             font-size: 10px
                             color: rgb(147, 153, 159)
+                    .cartcontrol-wrapper
+                        position: absolute
+                        right: 0
+                        bottom: 12px
 </style>
